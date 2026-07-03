@@ -86,6 +86,10 @@ jobs:
               echo "ERROR: ~/notebotlm/.env missing. Copy .env.production.example to .env on EC2 first."
               exit 1
             fi
-            docker compose -f docker-compose.prod.yml pull
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
-            docker image prune -f
+            if ! grep -q '^DATABASE_URL=' .env; then
+              echo "ERROR: DATABASE_URL is missing from ~/notebotlm/.env."
+              exit 1
+            fi
+            sudo docker compose -f docker-compose.prod.yml pull
+            sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            sudo docker image prune -f
