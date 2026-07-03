@@ -1,12 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-import { createClient } from "@supabase/supabase-js";
 import { db } from "@/server/db";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { getSupabase } from "@/lib/supabase";
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,6 +21,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });
     }
 
+    const supabase = getSupabase();
     const { data: fileData, error: downloadError } = await supabase.storage
       .from("files")
       .download(file.supabasePath);
