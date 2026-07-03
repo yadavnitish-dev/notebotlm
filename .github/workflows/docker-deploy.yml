@@ -80,10 +80,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -e
-            cd ~/NoteBotLM
+            cd ~/notebotlm
             git pull origin main
             if [ ! -f .env ]; then
-              echo "ERROR: ~/NoteBotLM/.env missing. Copy .env.production.example to .env on EC2 first."
+              echo "ERROR: ~/notebotlm/.env missing. Copy .env.production.example to .env on EC2 first."
               exit 1
             fi
             docker compose -f docker-compose.prod.yml pull
