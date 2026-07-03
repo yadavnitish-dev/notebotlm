@@ -5,7 +5,7 @@
 #   docker build --target app --build-arg NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co -t notebot-lm-app .
 #   docker build --target worker -t notebot-lm-worker .
 
-FROM node:18-bookworm-slim AS builder
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
+COPY prisma ./prisma
 RUN npm ci
 
 COPY . .
@@ -31,14 +32,12 @@ COPY . .
 ARG NEXT_PUBLIC_SUPABASE_URL
 ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
 
-RUN npx prisma generate
-
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV SKIP_ENV_VALIDATION=1
 RUN npm run build
 
 # ── App: Next.js standalone server ──────────────────────────────────────────
-FROM node:18-bookworm-slim AS app
+FROM node:20-bookworm-slim AS app
 
 WORKDIR /app
 
@@ -63,7 +62,7 @@ EXPOSE 3000
 CMD ["node", "server.js"]
 
 # ── Worker: background PDF processing queue ───────────────────────────────────
-FROM node:18-bookworm-slim AS worker
+FROM node:20-bookworm-slim AS worker
 
 WORKDIR /app
 
