@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase";
+import { getRedisConnection } from "@/lib/redis";
 import { Queue } from "bullmq";
 import { db } from "@/server/db";
 
@@ -10,26 +11,6 @@ interface FileUploadResponse {
   path: string;
   url?: string;
 }
-
-const getRedisConnection = () => {
-  if (process.env.UPSTASH_REDIS_REST_URL) {
-    return {
-      host: process.env.UPSTASH_REDIS_REST_URL.replace(
-        "https://",
-        "",
-      ).replace("http://", ""),
-      port: 6380,
-      password: process.env.UPSTASH_REDIS_REST_TOKEN,
-      tls: {},
-    };
-  } else if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
-    return {
-      host: process.env.REDIS_HOST,
-      port: parseInt(process.env.REDIS_PORT),
-    };
-  }
-  return null;
-};
 
 const redisConnection = getRedisConnection();
 

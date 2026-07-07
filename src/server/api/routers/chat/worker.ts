@@ -6,8 +6,8 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 import { v4 as uuidv4 } from "uuid";
 import { db } from "@/server/db";
 import { getSupabase } from "@/lib/supabase";
+import { getRedisConnection } from "@/lib/redis";
 import { Worker } from "bullmq";
-import IORedis from "ioredis";
 
 interface FileJobData {
   fileId: string;
@@ -45,31 +45,10 @@ const ensureCollectionExists = async () => {
   }
 };
 
-const getConnectionOptions = ():
-  | import("bullmq").ConnectionOptions
-  | undefined => {
-  if (process.env.REDIS_URL) {
-    try {
-      return new IORedis(process.env.REDIS_URL);
-    } catch (err) {
-      console.error(
-        "Failed to connect to Redis with REDIS_URL:",
-        process.env.REDIS_URL,
-        err,
-      );
-      throw err;
-    }
-  } else if (process.env.REDIS_HOST && process.env.REDIS_PORT) {
-    return {
-      host: process.env.REDIS_HOST,
-      port: parseInt(process.env.REDIS_PORT),
-    };
-  }
+const connectionOptions = getRedisConnection();
+if (!connectionOptions) {
   console.error("No Redis connection info found in environment variables.");
-  return undefined;
-};
-
-const connectionOptions = getConnectionOptions();
+}
 
 const workerOptions: WorkerOptions = {
   concurrency: 10,

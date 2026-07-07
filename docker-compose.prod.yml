@@ -8,6 +8,7 @@
 
 services:
   valkey:
+    profiles: [local]
     image: valkey/valkey:latest
     container_name: notebot-valkey
     restart: unless-stopped
@@ -21,6 +22,7 @@ services:
       retries: 3
 
   qdrant:
+    profiles: [local]
     image: qdrant/qdrant:latest
     container_name: notebot-qdrant
     restart: unless-stopped
@@ -49,8 +51,10 @@ services:
     depends_on:
       valkey:
         condition: service_healthy
+        required: false
       qdrant:
         condition: service_healthy
+        required: false
       migrate:
         condition: service_completed_successfully
 
@@ -62,8 +66,10 @@ services:
     depends_on:
       valkey:
         condition: service_healthy
+        required: false
       qdrant:
         condition: service_healthy
+        required: false
       migrate:
         condition: service_completed_successfully
 

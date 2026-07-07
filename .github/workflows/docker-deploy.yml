@@ -90,6 +90,13 @@ jobs:
               echo "ERROR: DATABASE_URL is missing from ~/notebotlm/.env."
               exit 1
             fi
+            if ! grep -q '^DOCKERHUB_USER=' .env; then
+              echo "ERROR: DOCKERHUB_USER is missing from ~/notebotlm/.env."
+              exit 1
+            fi
+            echo "${{ secrets.DOCKERHUB_TOKEN }}" | sudo docker login \
+              --username "${{ secrets.DOCKERHUB_USERNAME }}" \
+              --password-stdin
             sudo docker compose -f docker-compose.prod.yml pull
             sudo docker compose -f docker-compose.prod.yml up -d --remove-orphans
             sudo docker image prune -f
