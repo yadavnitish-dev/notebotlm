@@ -1,139 +1,29 @@
 "use client";
 
-import { type LoadError, type PdfJs, Worker } from "@react-pdf-viewer/core";
-import { pageNavigationPlugin } from "@react-pdf-viewer/page-navigation";
-import { searchPlugin } from "@react-pdf-viewer/search";
-import { highlightPlugin } from "@react-pdf-viewer/highlight";
-import { defaultLayoutPlugin } from "@react-pdf-viewer/default-layout";
-
-import "@react-pdf-viewer/core/lib/styles/index.css";
-import "@react-pdf-viewer/highlight/lib/styles/index.css";
-import "@react-pdf-viewer/page-navigation/lib/styles/index.css";
-import "@react-pdf-viewer/search/lib/styles/index.css";
-import "@react-pdf-viewer/default-layout/lib/styles/index.css";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
+import { useEffect, useRef, useState } from "react";
+import { CitationPdfCanvas } from "@/components/pdf/citation-pdf-canvas";
 import { usePdfFullText } from "@/hooks/use-pdf-full-text";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-const Viewer = dynamic(
-  () => import("@react-pdf-viewer/core").then((mod) => mod.Viewer),
-  { ssr: false },
-);
-
-interface CitationPdfCanvasProps {
-  pdfUrl: string;
-  textToHighlight: string;
-  initialPage?: number;
-}
-
-const CitationPdfCanvas = memo(function CitationPdfCanvas({
-  pdfUrl,
-  textToHighlight,
-  initialPage,
-}: CitationPdfCanvasProps) {
-  const citationRef = useRef({ textToHighlight, initialPage });
-  citationRef.current = { textToHighlight, initialPage };
-
-  const defaultLayoutPluginInstance = defaultLayoutPlugin();
-  const pageNavigationPluginInstance = pageNavigationPlugin();
-  const searchPluginInstance = searchPlugin();
-  const highlightPluginInstance = highlightPlugin();
-
-  const pageNavigationRef = useRef(pageNavigationPluginInstance);
-  const searchPluginRef = useRef(searchPluginInstance);
-  pageNavigationRef.current = pageNavigationPluginInstance;
-  searchPluginRef.current = searchPluginInstance;
-
-  const loadedDocumentRef = useRef<PdfJs.PdfDocument | null>(null);
-
-  const handleDocumentLoad = useCallback((e: { doc: PdfJs.PdfDocument }) => {
-    if (loadedDocumentRef.current === e.doc) return;
-    loadedDocumentRef.current = e.doc;
-
-    void (async () => {
-      const { textToHighlight: text, initialPage: page } = citationRef.current;
-      if (!text) return;
-
-      const doc = e.doc;
-      const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const multilineRegex = new RegExp(
-        escapedText.replace(/\s+/g, "\\s*[\\r\\n]*\\s*"),
-        "gi",
-      );
-
-      let targetPage = page;
-
-      if (!targetPage) {
-        for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-          const pdfPage = await doc.getPage(pageNum);
-          const textContent = await pdfPage.getTextContent();
-          const pageText = textContent.items.map((item) => item.str).join(" ");
-
-          if (multilineRegex.test(pageText)) {
-            targetPage = pageNum;
-            break;
-          }
-        }
-      }
-
-      if (targetPage) {
-        pageNavigationRef.current.jumpToPage(targetPage - 1);
-        void searchPluginRef.current.highlight(multilineRegex);
-      }
-    })();
-  }, []);
-
-  const renderPdfError = useCallback((error: LoadError) => {
-    const message = error.message ?? "Unable to load the source document.";
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="text-destructive max-w-md text-center">
-          <p className="mb-2 font-medium">Failed to load PDF</p>
-          <p className="text-muted-foreground text-sm">{message}</p>
-        </div>
-      </div>
-    );
-  }, []);
-
-  return (
-    <Worker
-      workerUrl={`https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js`}
-    >
-      <div className="h-full">
-        <Viewer
-          fileUrl={pdfUrl}
-          onDocumentLoad={handleDocumentLoad}
-          renderError={renderPdfError}
-          plugins={[
-            defaultLayoutPluginInstance,
-            pageNavigationPluginInstance,
-            searchPluginInstance,
-            highlightPluginInstance,
-          ]}
-        />
-      </div>
-    </Worker>
-  );
-});
+import { findBestTextMatch } from "@/lib/citation-highlight";
 
 interface PdfViewerProps {
   fileUrl?: string;
   textToHighlight: string;
   initialPage?: number;
   fileId?: string;
+  highlightRequestId: number;
 }
 
 export function PdfViewer({
   fileUrl,
-  textToHighlight = "An artificial Intelligence",
+  textToHighlight = "",
   initialPage,
   fileId,
+  highlightRequestId,
 }: PdfViewerProps) {
-  const [activeTab, setActiveTab] = useState<"fulltext" | "pdf">(
-    initialPage ? "pdf" : "fulltext",
-  );
+  const [activeTab, setActiveTab] = useState<"fulltext" | "pdf">("pdf");
+  const highlightMarkerRef = useRef<HTMLSpanElement>(null);
   const pdfUrl =
     fileUrl ??
     process.env.NEXT_PUBLIC_SUPABASE_URL +
@@ -146,66 +36,108 @@ export function PdfViewer({
   } = usePdfFullText(fileId ?? null);
 
   useEffect(() => {
-    if (initialPage) {
-      setActiveTab("pdf");
+    setActiveTab("pdf");
+  }, [textToHighlight, initialPage, pdfUrl]);
+
+  useEffect(() => {
+    if (activeTab !== "fulltext" || !textToHighlight || !fullTextData) return;
+
+    const timer = setTimeout(() => {
+      highlightMarkerRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [activeTab, textToHighlight, fullTextData]);
+
+  const renderHighlightedParagraph = (
+    paragraphText: string,
+    index: number,
+    isHighlightParagraph: boolean,
+  ) => {
+    if (!textToHighlight || !isHighlightParagraph) {
+      return (
+        <p
+          key={`para-${index}`}
+          className="mb-8 text-[15px] leading-[1.8] tracking-[0.01em] text-gray-800 dark:text-gray-200"
+        >
+          {paragraphText}
+        </p>
+      );
     }
-  }, [initialPage, pdfUrl]);
+
+    const match = findBestTextMatch(paragraphText, textToHighlight);
+    if (!match) {
+      return (
+        <p
+          key={`para-${index}`}
+          className="mb-8 text-[15px] leading-[1.8] tracking-[0.01em] text-gray-800 dark:text-gray-200"
+        >
+          {paragraphText}
+        </p>
+      );
+    }
+
+    const before = paragraphText.slice(0, match.index);
+    const highlighted = paragraphText.slice(
+      match.index,
+      match.index + match.length,
+    );
+    const after = paragraphText.slice(match.index + match.length);
+
+    return (
+      <p
+        key={`para-${index}`}
+        className="mb-8 text-[15px] leading-[1.8] tracking-[0.01em] text-gray-800 dark:text-gray-200"
+      >
+        {before}
+        <mark
+          ref={highlightMarkerRef}
+          data-citation-highlight
+          className="citation-text-highlight"
+        >
+          {highlighted}
+        </mark>
+        {after}
+      </p>
+    );
+  };
 
   const renderFormattedText = (text: string) => {
+    const highlightMatch = textToHighlight
+      ? findBestTextMatch(text, textToHighlight)
+      : null;
+    const highlightRange = highlightMatch
+      ? {
+          start: highlightMatch.index,
+          end: highlightMatch.index + highlightMatch.length,
+        }
+      : null;
+
     const lines = text.split("\n");
     const elements: React.ReactNode[] = [];
     let paragraphBuffer: string[] = [];
+    let charOffset = 0;
 
     const flushParagraph = (index: number) => {
       if (paragraphBuffer.length === 0) return;
 
       const paragraphText = paragraphBuffer.join(" ").trim();
-      if (!paragraphText) {
-        paragraphBuffer = [];
-        return;
-      }
+      const paragraphStart = charOffset;
+      const paragraphEnd = charOffset + paragraphText.length;
 
-      if (
-        textToHighlight &&
-        paragraphText.toLowerCase().includes(textToHighlight.toLowerCase())
-      ) {
-        const regex = new RegExp(
-          `(${textToHighlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-          "gi",
-        );
-        const parts = paragraphText.split(regex);
+      const overlapsHighlight =
+        highlightRange !== null &&
+        paragraphStart < highlightRange.end &&
+        paragraphEnd > highlightRange.start;
 
-        elements.push(
-          <p
-            key={`para-${index}`}
-            className="mb-8 text-[15px] leading-[1.8] tracking-[0.01em] text-gray-800 dark:text-gray-200"
-          >
-            {parts.map((part, partIndex) => {
-              if (part.toLowerCase() === textToHighlight.toLowerCase()) {
-                return (
-                  <mark
-                    key={partIndex}
-                    className="rounded-sm bg-blue-100 px-1 py-0.5 font-medium text-blue-900 dark:bg-blue-900/40 dark:text-blue-200"
-                  >
-                    {part}
-                  </mark>
-                );
-              }
-              return part;
-            })}
-          </p>,
-        );
-      } else {
-        elements.push(
-          <p
-            key={`para-${index}`}
-            className="mb-8 text-[15px] leading-[1.8] tracking-[0.01em] text-gray-800 dark:text-gray-200"
-          >
-            {paragraphText}
-          </p>,
-        );
-      }
+      elements.push(
+        renderHighlightedParagraph(paragraphText, index, overlapsHighlight),
+      );
 
+      charOffset = paragraphEnd;
       paragraphBuffer = [];
     };
 
@@ -218,6 +150,7 @@ export function PdfViewer({
         flushParagraph(i);
 
         const pageNum = pageMarkerMatch[1];
+        charOffset += line.length + 1;
         elements.push(
           <div key={`page-${pageNum}-${i}`} className="my-16 flex items-center">
             <div className="h-px flex-1 bg-gradient-to-r from-transparent via-gray-300 to-transparent dark:via-gray-600"></div>
@@ -239,10 +172,12 @@ export function PdfViewer({
 
       if (line.trim() === "") {
         flushParagraph(i);
+        charOffset += line.length + 1;
         continue;
       }
 
       paragraphBuffer.push(line.trim());
+      charOffset += line.length + 1;
     }
 
     flushParagraph(lines.length);
@@ -252,7 +187,6 @@ export function PdfViewer({
 
   return (
     <div className="flex h-full w-full flex-col">
-      {/* Tab Navigation */}
       <div className="flex border-b border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-900">
         <Button
           variant={activeTab === "fulltext" ? "default" : "ghost"}
@@ -264,7 +198,7 @@ export function PdfViewer({
               : "border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
           }`}
         >
-          📄 Full Text
+          Full Text
         </Button>
         <Button
           variant={activeTab === "pdf" ? "default" : "ghost"}
@@ -276,11 +210,10 @@ export function PdfViewer({
               : "border-transparent text-gray-600 hover:bg-gray-50 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200"
           }`}
         >
-          📋 PDF Viewer
+          PDF Viewer
         </Button>
       </div>
 
-      {/* Content Area */}
       <div className="flex-1 overflow-hidden bg-white dark:bg-gray-900">
         {activeTab === "fulltext" ? (
           <div className="h-full bg-gray-50 dark:bg-gray-950">
@@ -310,34 +243,8 @@ export function PdfViewer({
                       {fullTextData.fileName}
                     </h1>
                     <div className="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
-                      <span className="flex items-center space-x-1">
-                        <svg
-                          className="h-4 w-4"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        <span>{fullTextData.pageCount} pages</span>
-                      </span>
-                      <span className="flex items-center space-x-1">
-                        <svg
-                          className="h-4 w-4"
-                          fill="currentColor"
-                          viewBox="0 0 20 20"
-                        >
-                          <path
-                            fillRule="evenodd"
-                            d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-                            clipRule="evenodd"
-                          />
-                        </svg>
-                        <span>Full text extracted</span>
-                      </span>
+                      <span>{fullTextData.pageCount} pages</span>
+                      <span>Full text extracted</span>
                     </div>
                   </div>
                   <div className="prose prose-gray dark:prose-invert max-w-none">
@@ -356,10 +263,11 @@ export function PdfViewer({
         ) : (
           <div className="h-full">
             <CitationPdfCanvas
-              key={`${pdfUrl}-${initialPage ?? 0}-${textToHighlight}`}
+              key={pdfUrl}
               pdfUrl={pdfUrl}
               textToHighlight={textToHighlight}
               initialPage={initialPage}
+              highlightRequestId={highlightRequestId}
             />
           </div>
         )}

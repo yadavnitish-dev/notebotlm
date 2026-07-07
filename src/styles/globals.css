@@ -412,3 +412,41 @@ body {
 .chat-empty-state {
   @apply text-muted-foreground;
 }
+
+/* Citation highlight — classic yellow highlighter, readable on PDF & full text */
+:root,
+.dark {
+  --citation-highlight-bg: #fde047;
+  --citation-highlight-border: #eab308;
+  --citation-highlight-text: #1c1917;
+  --rpv-search__highlight-background-color: rgba(253, 224, 71, 0.55);
+  --rpv-search__highlight--current-background-color: rgba(253, 224, 71, 0.75);
+}
+
+.citation-text-highlight {
+  background-color: var(--citation-highlight-bg);
+  color: var(--citation-highlight-text);
+  border-radius: 2px;
+  padding: 0 2px;
+  font-weight: 600;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.citation-pdf-highlight {
+  background-color: var(--rpv-search__highlight-background-color) !important;
+  border-radius: 2px;
+}
+
+.citation-pdf-highlight--current {
+  background-color: var(--rpv-search__highlight--current-background-color) !important;
+}
+
+/* PDF pages stay white — keep canvas text readable in dark mode */
+.source-document-pdf-viewer .rpv-core__inner-page {
+  background-color: #fff !important;
+}
+
+.source-document-pdf-viewer .rpv-core__viewer--dark .rpv-core__inner-page {
+  background-color: #fff !important;
+}

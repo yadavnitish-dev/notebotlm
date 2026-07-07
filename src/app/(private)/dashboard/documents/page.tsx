@@ -11,6 +11,7 @@ import {
   CloudUpload,
   FileText,
   HardDrive,
+  Loader2,
   MessageSquare,
   MoreHorizontal,
   Search,
@@ -41,6 +42,7 @@ export default function DocumentsPage() {
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
 
   const {
     data: documents = [],
@@ -134,10 +136,13 @@ export default function DocumentsPage() {
 
   const handleDeleteFile = async (fileId: string) => {
     try {
+      setDeletingFileId(fileId);
       await deleteFileMutation.mutateAsync({ fileId });
       void refetchFiles();
     } catch (error) {
       console.error("Error deleting file:", error);
+    } finally {
+      setDeletingFileId(null);
     }
   };
 
@@ -448,9 +453,13 @@ export default function DocumentsPage() {
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive"
                       onClick={() => handleDeleteFile(doc.id)}
-                      disabled={deleteFileMutation.isPending}
+                      disabled={deletingFileId === doc.id}
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
+                      {deletingFileId === doc.id ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="mr-2 h-4 w-4" />
+                      )}
                       Delete
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -461,9 +470,13 @@ export default function DocumentsPage() {
                   size="sm"
                   className="text-muted-foreground hover:text-destructive hidden h-9 w-9 p-0 sm:flex"
                   onClick={() => handleDeleteFile(doc.id)}
-                  disabled={deleteFileMutation.isPending}
+                  disabled={deletingFileId === doc.id}
                 >
-                  <Trash2 className="h-4 w-4" />
+                  {deletingFileId === doc.id ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
                 </Button>
               </div>
             ))}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useLayoutEffect, useState, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useRouter } from "next/navigation";
@@ -45,6 +45,7 @@ interface CitationData {
   fileUrl: string;
   sourceId: string;
   fileId: string;
+  requestId: number;
 }
 
 export interface UploadedFile {
@@ -56,9 +57,22 @@ export interface UploadedFile {
 
 const SCROLL_BOTTOM_THRESHOLD = 80;
 
+function decodeCitationText(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .trim();
+}
+
 export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
   const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const shouldAutoScrollRef = useRef(true);
+  const isProgrammaticScrollRef = useRef(false);
   const hasInitializedDoc = useRef(false);
   const router = useRouter();
   const [citationData, setCitationData] = useState<CitationData | null>(null);
@@ -128,18 +142,24 @@ export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
   });
 
   useEffect(() => {
-    if (chatData?.messages) {
-      const uiMessages: UIMessage[] = chatData.messages.map((message) => ({
-        id: message.id,
-        role:
-          message.role === "USER" ? ("user" as const) : ("assistant" as const),
-        content: message.content,
-        createdAt: message.createdAt,
-        parts: [{ type: "text", text: message.content }],
-      }));
-      setMessages(uiMessages);
+    if (
+      !chatData?.messages ||
+      status === "submitted" ||
+      status === "streaming"
+    ) {
+      return;
     }
-  }, [chatData?.messages, setMessages]);
+
+    const uiMessages: UIMessage[] = chatData.messages.map((message) => ({
+      id: message.id,
+      role:
+        message.role === "USER" ? ("user" as const) : ("assistant" as const),
+      content: message.content,
+      createdAt: message.createdAt,
+      parts: [{ type: "text", text: message.content }],
+    }));
+    setMessages(uiMessages);
+  }, [chatData?.messages, setMessages, status]);
 
   const isLoading = status === "submitted" || status === "streaming";
 
@@ -154,11 +174,11 @@ export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
     (status === "submitted" || status === "streaming") && !hasResponseContent;
 
   const handleCitationClick = ({
-    messageId,
     citedText,
     pageNumber,
     fileId,
     sourceId,
+    messageId,
   }: {
     messageId: string;
     citedText: string;
@@ -166,18 +186,47 @@ export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
     fileId: string;
     sourceId: string;
   }) => {
-    const message = chatData?.messages.find((msg) => msg.id === messageId);
-    const fileSource =
-      message?.messageSources[+sourceId - 1] ??
-      message?.messageSources.find((file) => file.fileId === fileId);
-    if (!message || !fileSource) return;
+    let resolvedFileId = fileId;
+
+    if (!resolvedFileId) {
+      const message = chatData?.messages.find((msg) => msg.id === messageId);
+      const fromSourceIndex = message?.messageSources[+sourceId - 1];
+      const fromSourceMatch = message?.messageSources.find(
+        (source) => source.fileId === fileId,
+      );
+      resolvedFileId =
+        fromSourceMatch?.fileId ?? fromSourceIndex?.fileId ?? "";
+    }
+
+    if (!resolvedFileId) {
+      const chatFile = chatData?.messages
+        .flatMap((msg) => msg.messageSources)
+        .find((source) => source.fileId === fileId)?.fileId;
+      resolvedFileId = chatFile ?? "";
+    }
+
+    if (!resolvedFileId && lastSubmittedFiles.length > 0) {
+      resolvedFileId = lastSubmittedFiles[0]?.id ?? "";
+    }
+
+    if (!resolvedFileId && uploadedFiles.length > 0) {
+      resolvedFileId =
+        uploadedFiles.find((file) => !file.isUploading)?.id ?? "";
+    }
+
+    const normalizedCitedText = decodeCitationText(citedText);
+    if (!resolvedFileId || !normalizedCitedText) return;
+
+    const validPage =
+      Number.isFinite(pageNumber) && pageNumber > 0 ? pageNumber : undefined;
 
     setCitationData({
-      citedText,
-      pageNumber,
-      fileUrl: `/api/pdf/file?fileId=${fileSource.file.id}`,
+      citedText: normalizedCitedText,
+      pageNumber: validPage,
+      fileUrl: `/api/pdf/file?fileId=${resolvedFileId}`,
       sourceId,
-      fileId: fileSource.file.id,
+      fileId: resolvedFileId,
+      requestId: Date.now(),
     });
   };
 
@@ -185,32 +234,47 @@ export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
+    isProgrammaticScrollRef.current = true;
     viewport.scrollTo({
       top: viewport.scrollHeight,
       behavior,
     });
+    requestAnimationFrame(() => {
+      isProgrammaticScrollRef.current = false;
+    });
   }, []);
 
   const handleViewportScroll = useCallback(() => {
+    if (isProgrammaticScrollRef.current) return;
+
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
     const distanceFromBottom =
       viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-    const isNearBottom = distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD;
-    const wasAutoScrolling = shouldAutoScrollRef.current;
-    shouldAutoScrollRef.current = isNearBottom;
+    shouldAutoScrollRef.current =
+      distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD;
+  }, []);
 
-    if (!wasAutoScrolling && isNearBottom && isLoading) {
-      scrollToBottom();
-    }
-  }, [isLoading, scrollToBottom]);
-
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (shouldAutoScrollRef.current) {
       scrollToBottom();
     }
-  }, [messages, scrollToBottom]);
+  }, [messages, status, scrollToBottom]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    const observer = new ResizeObserver(() => {
+      if (shouldAutoScrollRef.current && isLoading) {
+        scrollToBottom();
+      }
+    });
+
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [isLoading, scrollToBottom]);
 
   const handleMessageSubmit = async (messageText: string) => {
     if (!messageText.trim() || isLoading) return;
@@ -235,7 +299,7 @@ export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
         <ResizablePanel defaultSize={citationData ? 60 : 100} minSize={40}>
           <div className="flex h-full min-h-0 flex-col">
             <ScrollArea
-              className="min-h-0 flex-1 px-4 py-6"
+              className="min-h-0 flex-1 px-4 py-6 [overflow-anchor:none]"
               viewportRef={scrollViewportRef}
               onViewportScroll={handleViewportScroll}
             >
@@ -250,16 +314,17 @@ export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
                   </p>
                 </div>
               ) : (
-                <div className="mx-auto max-w-4xl space-y-4">
-                  {messages.map((message, index) => {
+                <div
+                  ref={messagesContainerRef}
+                  className="mx-auto max-w-4xl space-y-4"
+                  style={{ overflowAnchor: "none" }}
+                >
+                  {messages.map((message, _index) => {
                     const messageData = chatData?.messages.find(
                       (msg) => msg.id === message.id,
                     );
 
                     const isNewMessage = !messageData;
-                    const isLastUserMessage =
-                      message.role === "user" && index === messages.length - 2;
-                    const isLastMessage = index === messages.length - 1;
 
                     let filesToDisplay: Array<{
                       file: { id: string; name: string };
@@ -440,6 +505,7 @@ export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
                     initialPage={citationData.pageNumber}
                     fileUrl={citationData.fileUrl}
                     fileId={citationData.fileId}
+                    highlightRequestId={citationData.requestId}
                   />
                 </div>
               </div>
