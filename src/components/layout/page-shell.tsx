@@ -17,7 +17,7 @@ export function PageShell({
   className,
 }: PageShellProps) {
   return (
-    <div className="page-grid-bg bg-background min-h-screen">
+    <div className="page-mesh-bg min-h-screen">
       <AppHeader backHref={backHref} backLabel={backLabel} />
       <main
         className={cn(

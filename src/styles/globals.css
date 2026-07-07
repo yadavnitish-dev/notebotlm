@@ -149,6 +149,41 @@ body {
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv11", "ss01";
   }
+  a,
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label[for],
+  summary,
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled),
+  input[type="range"]:not(:disabled),
+  [data-slot="select-trigger"]:not(:disabled),
+  [data-slot="select-item"]:not([data-disabled]),
+  [data-slot="dropdown-menu-item"]:not([data-disabled]),
+  [data-slot="dropdown-menu-checkbox-item"]:not([data-disabled]),
+  [data-slot="dropdown-menu-radio-item"]:not([data-disabled]),
+  [data-slot="dropdown-menu-sub-trigger"]:not([data-disabled]),
+  [data-slot="sidebar-menu-button"]:not([data-disabled]),
+  [data-slot="sidebar-menu-action"]:not([data-disabled]),
+  [data-slot="sheet-close"],
+  [data-slot="radio-group-item"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  input:disabled,
+  select:disabled,
+  textarea:disabled {
+    @apply cursor-not-allowed;
+  }
+  [data-slot="resizable-handle"] {
+    @apply cursor-col-resize;
+  }
+  [data-slot="resizable-handle"][data-panel-group-direction="vertical"] {
+    @apply cursor-row-resize;
+  }
 }
 
 .font-display {
@@ -166,6 +201,120 @@ body {
   background-image:
     linear-gradient(to right, oklch(0.26 0.008 75 / 0.4) 1px, transparent 1px),
     linear-gradient(to bottom, oklch(0.26 0.008 75 / 0.4) 1px, transparent 1px);
+}
+
+.page-mesh-bg {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.42 0.07 165 / 0.12), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, oklch(0.55 0.12 250 / 0.08), transparent),
+    radial-gradient(ellipse 50% 30% at 0% 100%, oklch(0.65 0.15 45 / 0.06), transparent);
+}
+
+.dark .page-mesh-bg {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -20%, oklch(0.58 0.1 165 / 0.15), transparent),
+    radial-gradient(ellipse 60% 40% at 100% 0%, oklch(0.65 0.12 250 / 0.1), transparent),
+    radial-gradient(ellipse 50% 30% at 0% 100%, oklch(0.72 0.12 45 / 0.08), transparent);
+}
+
+.hero-gradient {
+  background: linear-gradient(
+    135deg,
+    oklch(0.42 0.07 165 / 0.08) 0%,
+    oklch(0.55 0.12 250 / 0.05) 50%,
+    transparent 100%
+  );
+  border: 1px solid oklch(0.42 0.07 165 / 0.15);
+}
+
+.dark .hero-gradient {
+  background: linear-gradient(
+    135deg,
+    oklch(0.58 0.1 165 / 0.12) 0%,
+    oklch(0.65 0.12 250 / 0.08) 50%,
+    transparent 100%
+  );
+  border-color: oklch(0.58 0.1 165 / 0.2);
+}
+
+.upload-zone {
+  @apply relative overflow-hidden rounded-2xl border-2 border-dashed transition-all duration-300;
+  border-color: oklch(0.42 0.07 165 / 0.25);
+  background: oklch(0.42 0.07 165 / 0.03);
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: oklch(0.42 0.07 165 / 0.5);
+  background: oklch(0.42 0.07 165 / 0.06);
+  transform: translateY(-1px);
+}
+
+.dark .upload-zone {
+  border-color: oklch(0.58 0.1 165 / 0.3);
+  background: oklch(0.58 0.1 165 / 0.05);
+}
+
+.dark .upload-zone:hover,
+.dark .upload-zone.drag-over {
+  border-color: oklch(0.58 0.1 165 / 0.55);
+  background: oklch(0.58 0.1 165 / 0.1);
+}
+
+.doc-row {
+  @apply relative flex items-center gap-4 rounded-xl border bg-card p-4 transition-all duration-200;
+  border-color: oklch(0.91 0.006 90);
+}
+
+.doc-row:hover {
+  @apply shadow-md;
+  border-color: oklch(0.42 0.07 165 / 0.3);
+  transform: translateX(4px);
+}
+
+.dark .doc-row {
+  border-color: oklch(0.26 0.008 75);
+}
+
+.dark .doc-row:hover {
+  border-color: oklch(0.58 0.1 165 / 0.35);
+}
+
+.stat-chip {
+  @apply inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium;
+  background: oklch(0.42 0.07 165 / 0.08);
+  color: oklch(0.35 0.06 165);
+}
+
+.dark .stat-chip {
+  background: oklch(0.58 0.1 165 / 0.15);
+  color: oklch(0.75 0.08 165);
+}
+
+.quiz-stage-indicator {
+  @apply flex items-center gap-2;
+}
+
+.quiz-stage-dot {
+  @apply h-2 w-2 rounded-full transition-all duration-300;
+}
+
+.quiz-stage-dot.active {
+  @apply w-6;
+  background: oklch(0.42 0.07 165);
+}
+
+.dark .quiz-stage-dot.active {
+  background: oklch(0.58 0.1 165);
+}
+
+.quiz-stage-dot.inactive {
+  @apply bg-muted-foreground/30;
+}
+
+.quiz-stage-dot.completed {
+  background: oklch(0.42 0.07 165 / 0.5);
 }
 
 .glass-header {
@@ -205,24 +354,55 @@ body {
 
 .citation-badge {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  vertical-align: top;
+  display: inline;
+  vertical-align: super;
   font-variant-numeric: tabular-nums;
   line-height: 1;
   letter-spacing: -0.025em;
 }
 
-.citation-tooltip {
-  max-width: 320px;
-  font-size: 0.875rem;
-  line-height: 1.5;
-  padding: 0.75rem;
+.chat-message-content {
+  @apply text-foreground leading-relaxed;
+}
+
+.chat-message-content > *:first-child {
+  margin-top: 0;
+}
+
+.chat-message-content > *:last-child {
+  margin-bottom: 0;
+}
+
+.chat-message-content p {
+  @apply mb-3;
+}
+
+.chat-message-content ul,
+.chat-message-content ol {
+  @apply mb-3 ml-5;
+}
+
+.chat-message-content li {
+  @apply mb-1;
+}
+
+.chat-message-content h1,
+.chat-message-content h2,
+.chat-message-content h3,
+.chat-message-content h4 {
+  @apply mt-4 mb-2 font-semibold;
+}
+
+.chat-message-content hr {
+  @apply border-border my-4;
 }
 
 .chat-message-user {
   @apply bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-3;
+}
+
+.chat-message-user .chat-message-content {
+  @apply text-primary-foreground;
 }
 
 .chat-message-assistant {

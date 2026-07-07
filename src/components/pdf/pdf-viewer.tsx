@@ -1,6 +1,6 @@
 "use client";
 
-import { type PdfJs, Worker } from "@react-pdf-viewer/core";
+import { type LoadError, type PdfJs, Worker } from "@react-pdf-viewer/core";
 import { pageNavigationPlugin } from "@react-pdf-viewer/page-navigation";
 import { searchPlugin } from "@react-pdf-viewer/search";
 import { highlightPlugin } from "@react-pdf-viewer/highlight";
@@ -11,7 +11,7 @@ import "@react-pdf-viewer/highlight/lib/styles/index.css";
 import "@react-pdf-viewer/page-navigation/lib/styles/index.css";
 import "@react-pdf-viewer/search/lib/styles/index.css";
 import "@react-pdf-viewer/default-layout/lib/styles/index.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { usePdfFullText } from "@/hooks/use-pdf-full-text";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,102 @@ const Viewer = dynamic(
   () => import("@react-pdf-viewer/core").then((mod) => mod.Viewer),
   { ssr: false },
 );
+
+interface CitationPdfCanvasProps {
+  pdfUrl: string;
+  textToHighlight: string;
+  initialPage?: number;
+}
+
+const CitationPdfCanvas = memo(function CitationPdfCanvas({
+  pdfUrl,
+  textToHighlight,
+  initialPage,
+}: CitationPdfCanvasProps) {
+  const citationRef = useRef({ textToHighlight, initialPage });
+  citationRef.current = { textToHighlight, initialPage };
+
+  const defaultLayoutPluginInstance = defaultLayoutPlugin();
+  const pageNavigationPluginInstance = pageNavigationPlugin();
+  const searchPluginInstance = searchPlugin();
+  const highlightPluginInstance = highlightPlugin();
+
+  const pageNavigationRef = useRef(pageNavigationPluginInstance);
+  const searchPluginRef = useRef(searchPluginInstance);
+  pageNavigationRef.current = pageNavigationPluginInstance;
+  searchPluginRef.current = searchPluginInstance;
+
+  const loadedDocumentRef = useRef<PdfJs.PdfDocument | null>(null);
+
+  const handleDocumentLoad = useCallback((e: { doc: PdfJs.PdfDocument }) => {
+    if (loadedDocumentRef.current === e.doc) return;
+    loadedDocumentRef.current = e.doc;
+
+    void (async () => {
+      const { textToHighlight: text, initialPage: page } = citationRef.current;
+      if (!text) return;
+
+      const doc = e.doc;
+      const escapedText = text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const multilineRegex = new RegExp(
+        escapedText.replace(/\s+/g, "\\s*[\\r\\n]*\\s*"),
+        "gi",
+      );
+
+      let targetPage = page;
+
+      if (!targetPage) {
+        for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+          const pdfPage = await doc.getPage(pageNum);
+          const textContent = await pdfPage.getTextContent();
+          const pageText = textContent.items.map((item) => item.str).join(" ");
+
+          if (multilineRegex.test(pageText)) {
+            targetPage = pageNum;
+            break;
+          }
+        }
+      }
+
+      if (targetPage) {
+        pageNavigationRef.current.jumpToPage(targetPage - 1);
+        void searchPluginRef.current.highlight(multilineRegex);
+      }
+    })();
+  }, []);
+
+  const renderPdfError = useCallback((error: LoadError) => {
+    const message = error.message ?? "Unable to load the source document.";
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <div className="text-destructive max-w-md text-center">
+          <p className="mb-2 font-medium">Failed to load PDF</p>
+          <p className="text-muted-foreground text-sm">{message}</p>
+        </div>
+      </div>
+    );
+  }, []);
+
+  return (
+    <Worker
+      workerUrl={`https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js`}
+    >
+      <div className="h-full">
+        <Viewer
+          fileUrl={pdfUrl}
+          onDocumentLoad={handleDocumentLoad}
+          renderError={renderPdfError}
+          plugins={[
+            defaultLayoutPluginInstance,
+            pageNavigationPluginInstance,
+            searchPluginInstance,
+            highlightPluginInstance,
+          ]}
+        />
+      </div>
+    </Worker>
+  );
+});
 
 interface PdfViewerProps {
   fileUrl?: string;
@@ -35,8 +131,9 @@ export function PdfViewer({
   initialPage,
   fileId,
 }: PdfViewerProps) {
-  const [isLoadingDocument, setIsLoadingDocument] = useState(true);
-  const [activeTab, setActiveTab] = useState<"fulltext" | "pdf">("fulltext");
+  const [activeTab, setActiveTab] = useState<"fulltext" | "pdf">(
+    initialPage ? "pdf" : "fulltext",
+  );
   const pdfUrl =
     fileUrl ??
     process.env.NEXT_PUBLIC_SUPABASE_URL +
@@ -48,52 +145,11 @@ export function PdfViewer({
     error: fullTextError,
   } = usePdfFullText(fileId ?? null);
 
-  const pdfRef = useRef<PdfJs.PdfDocument>(null);
-  const defaultLayoutPluginInstance = defaultLayoutPlugin();
-  const pageNavigationPluginInstance = pageNavigationPlugin();
-  const searchPluginInstance = searchPlugin();
-  const highlightPluginInstance = highlightPlugin();
-
-  const searchAndHighlight = useCallback(
-    async (searchText: string) => {
-      if (!searchText || !pdfRef.current) return;
-
-      const doc = pdfRef.current;
-      let targetPage;
-      const escapedText = searchText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const multilineRegex = new RegExp(
-        escapedText.replace(/\s+/g, "\\s*[\\r\\n]*\\s*"),
-        "gi",
-      );
-      console.log("multilineRegex", multilineRegex);
-      if (initialPage) {
-        targetPage = initialPage;
-      } else {
-        for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
-          const page = await doc.getPage(pageNum);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items.map((item) => item.str).join(" ");
-
-          if (multilineRegex.test(pageText)) {
-            targetPage = pageNum;
-            break;
-          }
-        }
-      }
-      console.log("targetPage ", targetPage, searchText);
-      if (targetPage) {
-        pageNavigationPluginInstance.jumpToPage(targetPage - 1);
-        void searchPluginInstance.highlight(multilineRegex);
-      }
-    },
-    [initialPage, pageNavigationPluginInstance, searchPluginInstance],
-  );
-
   useEffect(() => {
-    if (isLoadingDocument) return;
-
-    void searchAndHighlight(textToHighlight);
-  }, [isLoadingDocument, textToHighlight]);
+    if (initialPage) {
+      setActiveTab("pdf");
+    }
+  }, [initialPage, pdfUrl]);
 
   const renderFormattedText = (text: string) => {
     const lines = text.split("\n");
@@ -299,25 +355,12 @@ export function PdfViewer({
           </div>
         ) : (
           <div className="h-full">
-            <Worker
-              workerUrl={`https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.worker.min.js`}
-            >
-              <div className="h-full">
-                <Viewer
-                  onDocumentLoad={(e) => {
-                    setIsLoadingDocument(false);
-                    pdfRef.current = e.doc;
-                  }}
-                  fileUrl={pdfUrl}
-                  plugins={[
-                    defaultLayoutPluginInstance,
-                    pageNavigationPluginInstance,
-                    searchPluginInstance,
-                    highlightPluginInstance,
-                  ]}
-                />
-              </div>
-            </Worker>
+            <CitationPdfCanvas
+              key={`${pdfUrl}-${initialPage ?? 0}-${textToHighlight}`}
+              pdfUrl={pdfUrl}
+              textToHighlight={textToHighlight}
+              initialPage={initialPage}
+            />
           </div>
         )}
       </div>

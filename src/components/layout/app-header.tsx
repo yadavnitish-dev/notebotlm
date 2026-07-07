@@ -25,21 +25,23 @@ export function AppHeader({
   return (
     <header className="glass-header sticky top-0 z-50 border-b">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <BrandLogo size="sm" />
-
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Button
             variant="ghost"
             size="sm"
-            className="text-muted-foreground hover:text-foreground h-8 gap-1.5 px-2.5 text-xs"
+            className="text-muted-foreground hover:text-foreground h-8 shrink-0 gap-1.5 px-2 text-xs sm:px-2.5"
             onClick={() => router.push(backHref)}
           >
             <ArrowLeft className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{backLabel}</span>
           </Button>
 
-          <div className="bg-border mx-1 hidden h-4 w-px sm:block" />
+          <div className="bg-border hidden h-4 w-px sm:block" />
 
+          <BrandLogo size="sm" className="min-w-0" />
+        </div>
+
+        <div className="flex shrink-0 items-center gap-1">
           <ThemeToggle />
 
           <Button

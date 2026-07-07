@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { LayoutDashboard, Plus } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -38,7 +38,24 @@ export function ChatSidebar({ user }: ChatSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent className="px-3 py-4 group-data-[collapsible=icon]:px-2">
-        <div className="mb-4">
+        <div className="mb-4 space-y-1">
+          <Button
+            asChild
+            variant="ghost"
+            className="group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 text-sidebar-foreground hover:!bg-sidebar-accent hover:!text-sidebar-accent-foreground active:!bg-sidebar-accent active:!text-sidebar-accent-foreground w-full justify-start gap-2 font-normal"
+            size="sm"
+          >
+            <Link
+              href="/dashboard"
+              className="group-data-[collapsible=icon]:flex group-data-[collapsible=icon]:items-center group-data-[collapsible=icon]:justify-center"
+            >
+              <LayoutDashboard className="h-4 w-4 group-data-[collapsible=icon]:mr-0" />
+              <span className="group-data-[collapsible=icon]:hidden">
+                Dashboard
+              </span>
+            </Link>
+          </Button>
+
           <Button
             asChild
             className="group-data-[collapsible=icon]:h-8 group-data-[collapsible=icon]:w-8 group-data-[collapsible=icon]:p-0 w-full justify-start gap-2"

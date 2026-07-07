@@ -1,13 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { api } from "@/trpc/react";
 import { Input } from "@/components/ui/input";
 import { PageShell } from "@/components/layout/page-shell";
-import { Eye, FileText, Trash2, Upload } from "lucide-react";
-import { fileToBase64 } from "@/lib/utils";
+import {
+  BrainCircuit,
+  CloudUpload,
+  FileText,
+  HardDrive,
+  MessageSquare,
+  MoreHorizontal,
+  Search,
+  Sparkles,
+  Trash2,
+  X,
+} from "lucide-react";
+import { fileToBase64, cn } from "@/lib/utils";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export interface UploadedFile {
   id: string;
@@ -18,8 +36,11 @@ export interface UploadedFile {
 
 export default function DocumentsPage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const {
     data: documents = [],
@@ -29,8 +50,8 @@ export default function DocumentsPage() {
   const uploadfileMutation = api.chat.uploadFiles.useMutation();
   const deleteFileMutation = api.chat.deleteFile.useMutation();
 
-  const handleFileUpload = async (selectedFiles: FileList) => {
-    const newFiles = Array.from(selectedFiles).map((file) => ({
+  const handleFileUpload = async (files: FileList) => {
+    const newFiles = Array.from(files).map((file) => ({
       id: crypto.randomUUID(),
       name: file.name,
       type: file.type,
@@ -41,7 +62,7 @@ export default function DocumentsPage() {
 
     const uploadPromises = newFiles.map(async (newFile) => {
       try {
-        const originalFile = Array.from(selectedFiles).find(
+        const originalFile = Array.from(files).find(
           (f) => f.name === newFile.name,
         );
         if (!originalFile) throw new Error("Original file not found");
@@ -75,18 +96,41 @@ export default function DocumentsPage() {
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSelectedFiles(e.target.files);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      setSelectedFiles(files);
+    }
   };
 
   const handleUploadClick = async () => {
     if (selectedFiles && selectedFiles.length > 0) {
       await handleFileUpload(selectedFiles);
       setSelectedFiles(null);
-      const fileInput = document.querySelector('input[type="file"]');
-      //@ts-expect-error - fileInput type needs to be cast to HTMLInputElement
-      if (fileInput) fileInput.value = "";
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(false);
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        const pdfFiles = Array.from(files).filter(
+          (f) => f.type === "application/pdf",
+        );
+        if (pdfFiles.length > 0) {
+          const dt = new DataTransfer();
+          pdfFiles.forEach((f) => dt.items.add(f));
+          setSelectedFiles(dt.files);
+          await handleFileUpload(dt.files);
+          setSelectedFiles(null);
+        }
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   const handleDeleteFile = async (fileId: string) => {
     try {
@@ -102,151 +146,330 @@ export default function DocumentsPage() {
     return file.isUploading && !isInDocuments;
   });
 
+  const filteredDocuments = useMemo(() => {
+    if (!searchQuery.trim()) return documents;
+    const q = searchQuery.toLowerCase();
+    return documents.filter((doc) => doc.name.toLowerCase().includes(q));
+  }, [documents, searchQuery]);
+
+  const totalSizeMB = useMemo(
+    () => documents.reduce((sum, doc) => sum + doc.size, 0) / 1024 / 1024,
+    [documents],
+  );
+
+  const formatDate = (date: Date | string) => {
+    return new Date(date).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
   return (
     <PageShell>
-      <div className="animate-fade-up mb-10">
-        <p className="section-label mb-2">Library</p>
-        <h1 className="font-display text-foreground text-3xl tracking-tight sm:text-4xl">
-          Documents
-        </h1>
-        <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-          Upload and manage your course materials
-        </p>
-      </div>
+      {/* Hero */}
+      <section className="hero-gradient animate-fade-up mb-8 rounded-2xl p-6 sm:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <div className="bg-accent/15 flex h-8 w-8 items-center justify-center rounded-lg">
+                <Sparkles className="text-accent h-4 w-4" />
+              </div>
+              <span className="text-accent text-xs font-semibold tracking-widest uppercase">
+                Your Library
+              </span>
+            </div>
+            <h1 className="font-display text-foreground text-3xl tracking-tight sm:text-4xl lg:text-5xl">
+              Course Materials
+            </h1>
+            <p className="text-muted-foreground mt-2 max-w-md text-[15px] leading-relaxed">
+              Upload PDFs, chat with your content, and generate quizzes — all
+              in one place.
+            </p>
+          </div>
 
-      {/* Upload */}
-      <div className="surface-card animate-fade-up mb-8 p-6">
-        <div className="mb-5 flex items-center justify-between">
-          <h2 className="text-foreground text-sm font-medium">Upload PDF</h2>
-          <span className="text-muted-foreground bg-muted rounded-md px-2 py-0.5 text-xs">
-            Max 50 MB
-          </span>
+          <div className="flex flex-wrap gap-3">
+            <div className="stat-chip">
+              <FileText className="h-4 w-4" />
+              <span>
+                {isLoadingFiles ? "—" : documents.length}{" "}
+                {documents.length === 1 ? "file" : "files"}
+              </span>
+            </div>
+            <div className="stat-chip">
+              <HardDrive className="h-4 w-4" />
+              <span>
+                {isLoadingFiles ? "—" : `${totalSizeMB.toFixed(1)} MB`}
+              </span>
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <Input
+      </section>
+
+      {/* Upload zone */}
+      <section className="animate-fade-up mb-10" style={{ animationDelay: "80ms" }}>
+        <div
+          className={cn("upload-zone p-8 sm:p-12", isDragOver && "drag-over")}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={handleDrop}
+        >
+          <input
+            ref={fileInputRef}
             type="file"
             accept="application/pdf"
             multiple
-            className="border-border bg-background flex-1 cursor-pointer file:mr-3 file:text-sm file:font-medium"
+            className="hidden"
             onChange={handleFileInputChange}
           />
-          <Button
-            onClick={handleUploadClick}
-            disabled={
-              !selectedFiles ||
-              selectedFiles.length === 0 ||
-              uploadfileMutation.isPending
-            }
-            className="shrink-0"
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            {uploadfileMutation.isPending ? "Uploading..." : "Upload"}
-          </Button>
+
+          <div className="flex flex-col items-center text-center">
+            <div className="bg-accent/10 mb-5 flex h-16 w-16 items-center justify-center rounded-2xl">
+              <CloudUpload className="text-accent h-8 w-8" />
+            </div>
+            <h2 className="text-foreground mb-2 text-lg font-semibold">
+              Drop your PDFs here
+            </h2>
+            <p className="text-muted-foreground mb-6 max-w-sm text-sm leading-relaxed">
+              Drag and drop course materials, or browse to select files. PDF
+              only, up to 50 MB each.
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-2"
+              >
+                <FileText className="h-4 w-4" />
+                Browse files
+              </Button>
+              {selectedFiles && selectedFiles.length > 0 && (
+                <Button
+                  onClick={handleUploadClick}
+                  disabled={uploadfileMutation.isPending}
+                  className="gap-2"
+                >
+                  <CloudUpload className="h-4 w-4" />
+                  {uploadfileMutation.isPending
+                    ? "Uploading..."
+                    : `Upload ${selectedFiles.length} file${selectedFiles.length > 1 ? "s" : ""}`}
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {selectedFiles && selectedFiles.length > 0 && (
+            <div className="border-border/60 mt-8 border-t pt-6">
+              <p className="text-muted-foreground mb-3 text-center text-xs font-medium tracking-wider uppercase">
+                Ready to upload
+              </p>
+              <div className="mx-auto flex max-w-md flex-wrap justify-center gap-2">
+                {Array.from(selectedFiles).map((file, index) => (
+                  <span
+                    key={index}
+                    className="bg-background/80 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs"
+                  >
+                    <FileText className="text-accent h-3 w-3" />
+                    <span className="max-w-[140px] truncate">{file.name}</span>
+                    <span className="text-muted-foreground tabular-nums">
+                      {(file.size / 1024 / 1024).toFixed(1)} MB
+                    </span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {selectedFiles && selectedFiles.length > 0 && (
-          <div className="border-border mt-5 space-y-2 border-t pt-5">
-            <p className="section-label mb-3">
-              Selected ({selectedFiles.length})
-            </p>
-            {Array.from(selectedFiles).map((file, index) => (
-              <div
-                key={index}
-                className="bg-muted/50 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm"
-              >
-                <FileText className="text-muted-foreground h-4 w-4 shrink-0" />
-                <span className="flex-1 truncate">{file.name}</span>
-                <span className="text-muted-foreground text-xs tabular-nums">
-                  {(file.size / 1024 / 1024).toFixed(1)} MB
-                </span>
-              </div>
-            ))}
+        {filesCurrentlyUploading.length > 0 && (
+          <div className="border-accent/30 bg-accent/5 mt-4 rounded-xl border p-4">
+            <div className="space-y-2">
+              {filesCurrentlyUploading.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2"
+                >
+                  <div className="border-accent border-t-transparent h-4 w-4 animate-spin rounded-full border-2" />
+                  <span className="text-sm font-medium">{file.name}</span>
+                  <span className="text-muted-foreground text-xs">
+                    Uploading...
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-      </div>
+      </section>
 
-      {filesCurrentlyUploading.length > 0 && (
-        <div className="surface-card border-accent/30 mb-8 p-6">
-          <p className="section-label mb-4">Uploading</p>
-          <div className="space-y-2">
-            {filesCurrentlyUploading.map((file) => (
-              <div
-                key={file.id}
-                className="bg-muted/50 flex items-center gap-3 rounded-lg px-3 py-2.5"
-              >
-                <div className="border-accent border-t-transparent h-4 w-4 animate-spin rounded-full border-2" />
-                <span className="text-sm">{file.name}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Document grid */}
-      <div>
-        <p className="section-label mb-4">Your files</p>
-
-        {isLoadingFiles ? (
-          <div className="surface-card flex flex-col items-center justify-center p-16 text-center">
-            <div className="border-muted-foreground/30 border-t-foreground mb-4 h-8 w-8 animate-spin rounded-full border-2" />
-            <p className="text-muted-foreground text-sm">Loading documents...</p>
-          </div>
-        ) : documents.length === 0 && uploadedFiles.length === 0 ? (
-          <div className="surface-card flex flex-col items-center justify-center p-16 text-center">
-            <div className="bg-muted mb-4 flex h-12 w-12 items-center justify-center rounded-xl">
-              <Upload className="text-muted-foreground h-5 w-5" />
-            </div>
-            <h3 className="text-foreground text-sm font-medium">
-              No documents yet
-            </h3>
-            <p className="text-muted-foreground mt-1 text-sm">
-              Upload your first coursebook to get started
+      {/* File library */}
+      <section className="animate-fade-up" style={{ animationDelay: "160ms" }}>
+        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-foreground text-xl font-semibold tracking-tight">
+              Your Documents
+            </h2>
+            <p className="text-muted-foreground mt-0.5 text-sm">
+              {filteredDocuments.length} of {documents.length} shown
             </p>
           </div>
+
+          {documents.length > 0 && (
+            <div className="relative w-full sm:w-72">
+              <Search className="text-muted-foreground absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <Input
+                placeholder="Search documents..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-background h-10 pl-9"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="text-muted-foreground hover:text-foreground absolute top-1/2 right-3 -translate-y-1/2"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {isLoadingFiles ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="bg-muted/40 h-[76px] animate-pulse rounded-xl"
+              />
+            ))}
+          </div>
+        ) : documents.length === 0 && uploadedFiles.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-20 text-center">
+            <div className="bg-muted/60 mb-5 flex h-14 w-14 items-center justify-center rounded-2xl">
+              <FileText className="text-muted-foreground h-6 w-6" />
+            </div>
+            <h3 className="text-foreground text-lg font-medium">
+              No documents yet
+            </h3>
+            <p className="text-muted-foreground mt-1 max-w-xs text-sm leading-relaxed">
+              Upload your first coursebook above to start chatting and taking
+              quizzes.
+            </p>
+          </div>
+        ) : filteredDocuments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed py-16 text-center">
+            <Search className="text-muted-foreground mb-3 h-8 w-8" />
+            <p className="text-muted-foreground text-sm">
+              No documents match &ldquo;{searchQuery}&rdquo;
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => setSearchQuery("")}
+            >
+              Clear search
+            </Button>
+          </div>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {documents.map((doc) => (
-              <div key={doc.id} className="surface-card group p-4">
-                <div className="mb-4 flex items-start gap-3">
-                  <div className="bg-muted flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
-                    <FileText className="text-muted-foreground h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="text-foreground truncate text-sm font-medium">
-                      {doc.name}
-                    </h4>
-                    <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
-                      {(doc.size / 1024 / 1024).toFixed(1)} MB ·{" "}
-                      {new Date(doc.createdAt).toLocaleDateString()}
-                    </p>
-                  </div>
+          <div className="space-y-3">
+            {filteredDocuments.map((doc, i) => (
+              <div
+                key={doc.id}
+                className="doc-row animate-fade-up"
+                style={{ animationDelay: `${i * 40}ms` }}
+              >
+                <div className="bg-accent/10 flex h-12 w-12 shrink-0 items-center justify-center rounded-xl">
+                  <FileText className="text-accent h-5 w-5" />
                 </div>
-                <div className="flex gap-2">
+
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-foreground truncate font-medium">
+                    {doc.name}
+                  </h4>
+                  <p className="text-muted-foreground mt-0.5 text-xs tabular-nums">
+                    {(doc.size / 1024 / 1024).toFixed(1)} MB ·{" "}
+                    {formatDate(doc.createdAt)}
+                  </p>
+                </div>
+
+                <div className="hidden items-center gap-2 sm:flex">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 gap-1.5 text-xs"
+                    onClick={() => router.push(`/chat?docId=${doc.id}`)}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    Chat
+                  </Button>
                   <Button
                     size="sm"
-                    className="h-8 flex-1 text-xs"
+                    className="h-9 gap-1.5 text-xs"
                     onClick={() =>
                       router.push(`/dashboard/quiz?docId=${doc.id}`)
                     }
                   >
-                    <Eye className="mr-1.5 h-3 w-3" />
+                    <BrainCircuit className="h-3.5 w-3.5" />
                     Quiz
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive hover:text-destructive h-8 w-8 p-0"
-                    onClick={() => handleDeleteFile(doc.id)}
-                    disabled={deleteFileMutation.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
                 </div>
+
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground h-9 w-9 p-0 sm:hidden"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => router.push(`/chat?docId=${doc.id}`)}
+                    >
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                      Chat with document
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        router.push(`/dashboard/quiz?docId=${doc.id}`)
+                      }
+                    >
+                      <BrainCircuit className="mr-2 h-4 w-4" />
+                      Take a quiz
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onClick={() => handleDeleteFile(doc.id)}
+                      disabled={deleteFileMutation.isPending}
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Delete
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-destructive hidden h-9 w-9 p-0 sm:flex"
+                  onClick={() => handleDeleteFile(doc.id)}
+                  disabled={deleteFileMutation.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </section>
     </PageShell>
   );
 }

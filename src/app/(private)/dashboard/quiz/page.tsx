@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  BrainCircuit,
   CheckCircle2,
   Loader2,
   RefreshCw,
@@ -122,19 +123,43 @@ function QuizPageContent() {
 
   return (
     <PageShell narrow>
+      {/* Stage indicator */}
+      <div className="quiz-stage-indicator animate-fade-up mb-8 justify-center">
+        {(["generate", "quiz", "result"] as const).map((s, i) => (
+          <div key={s} className="flex items-center gap-2">
+            <div
+              className={cn(
+                "quiz-stage-dot",
+                stage === s
+                  ? "active"
+                  : (["generate", "quiz", "result"].indexOf(stage) > i
+                      ? "completed"
+                      : "inactive"),
+              )}
+            />
+            {i < 2 && (
+              <div className="bg-muted-foreground/20 h-px w-8" />
+            )}
+          </div>
+        ))}
+      </div>
+
       {stage === "generate" && (
         <>
-          <div className="animate-fade-up mb-10">
-            <p className="section-label mb-2">Practice</p>
+          <div className="hero-gradient animate-fade-up mb-8 rounded-2xl p-6 sm:p-8 text-center">
+            <div className="bg-accent/15 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl">
+              <BrainCircuit className="text-accent h-6 w-6" />
+            </div>
             <h1 className="font-display text-foreground text-3xl tracking-tight sm:text-4xl">
-              Generate Quiz
+              Generate a Quiz
             </h1>
-            <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
-              Create AI-powered quizzes from your uploaded documents
+            <p className="text-muted-foreground mx-auto mt-2 max-w-md text-sm leading-relaxed">
+              Pick a document, choose your question style, and let AI build a
+              personalized practice session.
             </p>
           </div>
 
-          <div className="surface-card animate-fade-up space-y-6 p-6">
+          <div className="surface-card animate-fade-up space-y-6 rounded-2xl p-6 sm:p-8">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Document</Label>
               <Select
@@ -209,20 +234,25 @@ function QuizPageContent() {
             </div>
 
             {selectedDoc && (
-              <div className="bg-muted/50 rounded-lg px-4 py-3">
-                <p className="text-foreground text-sm font-medium">
-                  {selectedDoc.name}
-                </p>
-                <p className="text-muted-foreground mt-0.5 text-xs">
-                  {(selectedDoc.size / 1024 / 1024).toFixed(1)} MB · Uploaded{" "}
-                  {new Date(selectedDoc.createdAt).toLocaleDateString()}
-                </p>
+              <div className="bg-accent/5 border-accent/20 flex items-center gap-3 rounded-xl border px-4 py-3">
+                <div className="bg-accent/10 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg">
+                  <BrainCircuit className="text-accent h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-foreground truncate text-sm font-medium">
+                    {selectedDoc.name}
+                  </p>
+                  <p className="text-muted-foreground mt-0.5 text-xs">
+                    {(selectedDoc.size / 1024 / 1024).toFixed(1)} MB · Uploaded{" "}
+                    {new Date(selectedDoc.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
             )}
 
             <Button
               onClick={handleGenerateQuiz}
-              className="w-full"
+              className="h-11 w-full text-[15px]"
               disabled={
                 !selectedDocument ||
                 !quizType ||
@@ -261,19 +291,41 @@ function QuizPageContent() {
 
       {stage === "quiz" && (
         <>
-          <div className="animate-fade-up mb-8 flex items-end justify-between">
+          <div className="animate-fade-up mb-6 flex items-end justify-between">
             <div>
-              <p className="section-label mb-2">{currentQ?.topic}</p>
+              <span className="stat-chip mb-3 text-xs">
+                {currentQ?.topic}
+              </span>
               <h1 className="font-display text-foreground text-2xl tracking-tight sm:text-3xl">
                 Question {currentQuestion + 1}
               </h1>
             </div>
-            <span className="text-muted-foreground bg-muted rounded-full px-3 py-1 text-xs tabular-nums">
-              {currentQuestion + 1} / {generatedQuestions.length}
-            </span>
+            <div className="text-right">
+              <p className="text-muted-foreground text-xs font-medium tracking-wider uppercase">
+                Progress
+              </p>
+              <p className="text-foreground text-lg font-semibold tabular-nums">
+                {currentQuestion + 1}
+                <span className="text-muted-foreground text-sm font-normal">
+                  {" "}
+                  / {generatedQuestions.length}
+                </span>
+              </p>
+            </div>
           </div>
 
-          <div className="surface-card animate-fade-up space-y-6 p-6">
+          <div className="mb-4">
+            <div className="bg-muted h-1.5 w-full overflow-hidden rounded-full">
+              <div
+                className="bg-accent h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${((currentQuestion + 1) / generatedQuestions.length) * 100}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="surface-card animate-fade-up space-y-6 rounded-2xl p-6 sm:p-8">
             <p className="text-foreground text-[15px] leading-relaxed font-medium">
               {currentQ?.question}
             </p>
@@ -294,10 +346,10 @@ function QuizPageContent() {
                     key={idx}
                     htmlFor={`option-${idx}`}
                     className={cn(
-                      "border-border flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3.5 transition-colors",
+                      "flex cursor-pointer items-center gap-3 rounded-xl border-2 px-4 py-4 transition-all duration-200",
                       userAnswers[currentQuestion] === idx.toString()
-                        ? "border-accent bg-accent/5"
-                        : "hover:bg-muted/50",
+                        ? "border-accent bg-accent/8 shadow-sm"
+                        : "border-border hover:border-accent/30 hover:bg-muted/40",
                     )}
                   >
                     <RadioGroupItem
@@ -372,14 +424,38 @@ function QuizPageContent() {
 
       {stage === "result" && (
         <>
-          <div className="animate-fade-up mb-10 text-center">
-            <p className="section-label mb-2">Results</p>
-            <div className="font-display text-accent text-7xl tracking-tight tabular-nums">
+          <div className="hero-gradient animate-fade-up mb-10 rounded-2xl p-8 text-center">
+            <p className="text-muted-foreground mb-2 text-xs font-medium tracking-widest uppercase">
+              Your Score
+            </p>
+            <div
+              className={cn(
+                "font-display text-7xl tracking-tight tabular-nums",
+                scorePercent >= 70
+                  ? "text-accent"
+                  : scorePercent >= 50
+                    ? "text-foreground"
+                    : "text-destructive",
+              )}
+            >
               {scorePercent}%
             </div>
             <p className="text-muted-foreground mt-2 text-sm">
               {quizScore} of {generatedQuestions.length} correct
             </p>
+            <div className="bg-muted mx-auto mt-6 h-2 max-w-xs overflow-hidden rounded-full">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-700",
+                  scorePercent >= 70
+                    ? "bg-accent"
+                    : scorePercent >= 50
+                      ? "bg-muted-foreground/50"
+                      : "bg-destructive",
+                )}
+                style={{ width: `${scorePercent}%` }}
+              />
+            </div>
           </div>
 
           <div className="animate-fade-up mb-8 space-y-3">
@@ -392,7 +468,7 @@ function QuizPageContent() {
                   : false);
 
               return (
-                <div key={idx} className="surface-card p-5">
+                <div key={idx} className="surface-card rounded-xl p-5">
                   <div className="flex items-start gap-3">
                     {isCorrect ? (
                       <CheckCircle2 className="text-accent mt-0.5 h-5 w-5 shrink-0" />

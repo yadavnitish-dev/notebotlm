@@ -123,8 +123,10 @@ const ProgressPage = () => {
 
   return (
     <PageShell>
-      <div className="animate-fade-up mb-10">
-        <p className="section-label mb-2">Insights</p>
+      <div className="hero-gradient animate-fade-up mb-10 rounded-2xl p-6 sm:p-8">
+        <p className="text-accent mb-2 text-xs font-semibold tracking-widest uppercase">
+          Insights
+        </p>
         <h1 className="font-display text-foreground text-3xl tracking-tight sm:text-4xl">
           {userFirstName ? `${userFirstName}'s progress` : "Your progress"}
         </h1>
@@ -133,11 +135,12 @@ const ProgressPage = () => {
         </p>
       </div>
 
-      <section className="mb-10 grid grid-cols-2 gap-px overflow-hidden rounded-xl border lg:grid-cols-4">
+      <section className="mb-10 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {statCards.map((stat, i) => (
           <div
             key={stat.label}
-            className={cn("bg-card p-5 sm:p-6", i > 0 && "border-border border-l")}
+            className="surface-card animate-fade-up rounded-xl p-5 sm:p-6"
+            style={{ animationDelay: `${i * 60}ms` }}
           >
             <p className="section-label mb-3">{stat.label}</p>
             <p className="stat-value">{stat.value}</p>
@@ -147,7 +150,7 @@ const ProgressPage = () => {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Topic performance */}
-        <div className="surface-card">
+        <div className="surface-card overflow-hidden rounded-xl">
           <div className="border-border border-b px-6 py-5">
             <h2 className="text-foreground text-sm font-medium">
               Topic performance
@@ -214,7 +217,7 @@ const ProgressPage = () => {
         </div>
 
         {/* Recent quizzes */}
-        <div className="surface-card">
+        <div className="surface-card overflow-hidden rounded-xl">
           <div className="border-border border-b px-6 py-5">
             <h2 className="text-foreground text-sm font-medium">
               Recent quizzes

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useRouter } from "next/navigation";
@@ -13,12 +13,8 @@ import {
   ResizableHandle,
 } from "@/components/ui/resizable";
 import { Button } from "@/components/ui/button";
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from "@/components/ui/tooltip";
 import { ChatInput } from "@/components/chat/chat-input";
+import { CitationBadge } from "@/components/chat/citation-badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { PdfViewer } from "@/components/pdf/pdf-viewer";
 
@@ -41,6 +37,7 @@ const XIcon = () => (
 
 interface ChatComponentProps {
   chatId?: string;
+  initialDocId?: string;
 }
 interface CitationData {
   citedText: string;
@@ -57,8 +54,12 @@ export interface UploadedFile {
   isUploading: boolean;
 }
 
-export function ChatComponent({ chatId }: ChatComponentProps) {
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+const SCROLL_BOTTOM_THRESHOLD = 80;
+
+export function ChatComponent({ chatId, initialDocId }: ChatComponentProps) {
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const hasInitializedDoc = useRef(false);
   const router = useRouter();
   const [citationData, setCitationData] = useState<CitationData | null>(null);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -71,6 +72,29 @@ export function ChatComponent({ chatId }: ChatComponentProps) {
     { id: chatId! },
     { enabled: !!chatId },
   );
+
+  const { data: userFiles } = api.chat.listFiles.useQuery(undefined, {
+    enabled: !!initialDocId && !chatId,
+  });
+
+  useEffect(() => {
+    if (!initialDocId || chatId || hasInitializedDoc.current || !userFiles) {
+      return;
+    }
+
+    const doc = userFiles.find((file) => file.id === initialDocId);
+    if (doc) {
+      setUploadedFiles([
+        {
+          id: doc.id,
+          name: doc.name,
+          type: doc.fileType,
+          isUploading: false,
+        },
+      ]);
+      hasInitializedDoc.current = true;
+    }
+  }, [initialDocId, chatId, userFiles]);
 
   const { messages, status, sendMessage, setMessages } = useChat({
     transport: new DefaultChatTransport({
@@ -151,20 +175,47 @@ export function ChatComponent({ chatId }: ChatComponentProps) {
     setCitationData({
       citedText,
       pageNumber,
-      fileUrl: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/files/${fileSource.file.supabasePath}`,
+      fileUrl: `/api/pdf/file?fileId=${fileSource.file.id}`,
       sourceId,
-      fileId,
+      fileId: fileSource.file.id,
     });
   };
 
-  useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTop = scrollAreaRef.current.scrollHeight;
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "auto") => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    viewport.scrollTo({
+      top: viewport.scrollHeight,
+      behavior,
+    });
+  }, []);
+
+  const handleViewportScroll = useCallback(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    const distanceFromBottom =
+      viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+    const isNearBottom = distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD;
+    const wasAutoScrolling = shouldAutoScrollRef.current;
+    shouldAutoScrollRef.current = isNearBottom;
+
+    if (!wasAutoScrolling && isNearBottom && isLoading) {
+      scrollToBottom();
     }
-  }, [messages]);
+  }, [isLoading, scrollToBottom]);
+
+  useEffect(() => {
+    if (shouldAutoScrollRef.current) {
+      scrollToBottom();
+    }
+  }, [messages, scrollToBottom]);
 
   const handleMessageSubmit = async (messageText: string) => {
     if (!messageText.trim() || isLoading) return;
+
+    shouldAutoScrollRef.current = true;
 
     const fileIds = uploadedFiles
       .filter((file) => !file.isUploading)
@@ -183,7 +234,11 @@ export function ChatComponent({ chatId }: ChatComponentProps) {
       <ResizablePanelGroup direction="horizontal" className="min-h-0 flex-1">
         <ResizablePanel defaultSize={citationData ? 60 : 100} minSize={40}>
           <div className="flex h-full min-h-0 flex-col">
-            <ScrollArea className="min-h-0 flex-1 px-4 py-6" ref={scrollAreaRef}>
+            <ScrollArea
+              className="min-h-0 flex-1 px-4 py-6"
+              viewportRef={scrollViewportRef}
+              onViewportScroll={handleViewportScroll}
+            >
               {messages.length === 0 ? (
                 <div className="flex h-full w-full flex-col items-center justify-center px-6 text-center">
                   <p className="font-display text-foreground text-3xl tracking-tight sm:text-4xl">
@@ -280,7 +335,7 @@ export function ChatComponent({ chatId }: ChatComponentProps) {
                                 ))}
                               </div>
                             )}
-                            <p className="whitespace-pre-wrap">
+                            <div className="chat-message-content">
                               {message.parts
                                 ?.filter((part) => part.type === "text")
                                 .map((part, _index) => (
@@ -294,53 +349,45 @@ export function ChatComponent({ chatId }: ChatComponentProps) {
                                       }: {
                                         children: React.ReactNode;
                                         "cited-text": string;
-                                        "file-page-number": number;
+                                        "file-page-number": string | number;
                                         "file-id": string;
                                         "source-id": string;
-                                      }) => (
-                                        <Tooltip>
-                                          <TooltipTrigger asChild>
-                                            <span
-                                    className="border-border bg-muted text-accent hover:bg-accent/10 ml-0.5 inline-flex h-5 w-auto min-w-[1.2rem] cursor-pointer items-center justify-center rounded-md border px-1.5 text-xs font-medium transition-colors"
-                                              onClick={() =>
-                                                handleCitationClick({
-                                                  messageId: message.id,
-                                                  citedText: rest["cited-text"],
-                                                  pageNumber:
-                                                    rest["file-page-number"],
-                                                  fileId: rest["file-id"],
-                                                  sourceId: rest["source-id"],
-                                                })
-                                              }
-                                            >
-                                              {typeof children === "string" ||
-                                              typeof children === "number"
-                                                ? String(children).replace(
-                                                    /[\[\]]/g,
-                                                    "",
-                                                  )
-                                                : children}
-                                            </span>
-                                          </TooltipTrigger>
-                                          <TooltipContent className="citation-tooltip max-w-sm p-3 text-sm">
-                                            <div className="space-y-1">
-                                              <p className="font-medium text-gray-900 dark:text-gray-100">
-                                                Source Reference
-                                              </p>
-                                              <p className="leading-relaxed text-gray-700 dark:text-gray-300">
-                                                {rest["cited-text"]}
-                                              </p>
-                                            </div>
-                                          </TooltipContent>
-                                        </Tooltip>
-                                      ),
+                                      }) => {
+                                        const label =
+                                          typeof children === "string" ||
+                                          typeof children === "number"
+                                            ? String(children).replace(
+                                                /[\[\]]/g,
+                                                "",
+                                              )
+                                            : "•";
+
+                                        return (
+                                          <CitationBadge
+                                            label={label}
+                                            citedText={rest["cited-text"] ?? ""}
+                                            onClick={() =>
+                                              handleCitationClick({
+                                                messageId: message.id,
+                                                citedText:
+                                                  rest["cited-text"] ?? "",
+                                                pageNumber: Number(
+                                                  rest["file-page-number"],
+                                                ),
+                                                fileId: rest["file-id"],
+                                                sourceId: rest["source-id"],
+                                              })
+                                            }
+                                          />
+                                        );
+                                      },
                                     }}
                                     key={_index}
                                   >
                                     {part.text}
                                   </Streamdown>
                                 ))}
-                            </p>
+                            </div>
                           </div>
                         </div>
                       </div>

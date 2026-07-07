@@ -93,7 +93,7 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="page-grid-bg bg-background min-h-screen">
+    <div className="page-mesh-bg min-h-screen">
       <header className="glass-header sticky top-0 z-50 border-b">
         <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6 lg:px-8">
           <BrandLogo size="sm" />
@@ -114,19 +114,22 @@ export default function Dashboard() {
 
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
         {/* Hero */}
-        <section className="animate-fade-up mb-12 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="section-label mb-3">Dashboard</p>
-            <h1 className="font-display text-foreground text-4xl tracking-tight sm:text-5xl">
-              Good to see you, {userFirstName}
-            </h1>
-            <p className="text-muted-foreground mt-3 max-w-lg text-[15px] leading-relaxed">
-              Your learning workspace — upload materials, practice with quizzes,
-              and research with AI.
-            </p>
-          </div>
+        <section className="hero-gradient animate-fade-up mb-12 rounded-2xl p-6 sm:p-8">
+          <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-accent mb-3 text-xs font-semibold tracking-widest uppercase">
+                Dashboard
+              </p>
+              <h1 className="font-display text-foreground text-4xl tracking-tight sm:text-5xl">
+                Good to see you, {userFirstName}
+              </h1>
+              <p className="text-muted-foreground mt-3 max-w-lg text-[15px] leading-relaxed">
+                Your learning workspace — upload materials, practice with quizzes,
+                and research with AI.
+              </p>
+            </div>
 
-          <div className="surface-card flex items-center gap-4 px-5 py-4">
+            <div className="surface-card flex items-center gap-4 rounded-xl px-5 py-4">
             <div className="bg-accent/10 flex h-10 w-10 items-center justify-center rounded-lg">
               <Flame className="text-accent h-5 w-5" />
             </div>
@@ -141,16 +144,16 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
+          </div>
         </section>
 
         {/* Stats */}
-        <section className="mb-12 grid grid-cols-2 gap-px overflow-hidden rounded-xl border lg:grid-cols-4">
+        <section className="mb-12 grid grid-cols-2 gap-3 lg:grid-cols-4">
           {stats.map((stat, i) => (
             <div
               key={stat.label}
               className={cn(
-                "bg-card animate-fade-up p-5 sm:p-6",
-                i > 0 && "border-border border-l",
+                "surface-card animate-fade-up rounded-xl p-5 sm:p-6",
               )}
               style={{ animationDelay: `${i * 60}ms` }}
             >
@@ -184,7 +187,7 @@ export default function Dashboard() {
               <button
                 key={action.title}
                 onClick={() => router.push(action.href)}
-                className="surface-card group animate-fade-up flex cursor-pointer items-start gap-4 p-5 text-left transition-colors hover:bg-muted/40"
+                className="surface-card group animate-fade-up flex cursor-pointer items-start gap-4 rounded-xl p-5 text-left transition-all duration-200 hover:shadow-md"
                 style={{ animationDelay: `${(i + 4) * 60}ms` }}
               >
                 <div className="bg-muted group-hover:bg-accent/10 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors">
